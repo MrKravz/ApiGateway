@@ -1,3 +1,26 @@
 spring:
   application:
     name: ApiGateway
+  cloud:
+    gateway:
+      routes:
+        - id: user-service-route
+          uri: lb:${USER_SERVICE_URI}
+          predicates:
+            - Path=/users/**, /payment-cards/**
+          filters:
+            - AuthFilter
+            - HeaderFilter
+
+        - id: auth-service-route
+          uri: lb:${AUTH_SERVICE_URI}
+          predicates:
+            - Path=/auth/**
+
+        - id: order-service-route
+          uri: lb:${ORDER_SERVICE_URI}
+          predicates:
+            - Path=/orders/**, /items/**, /users/{userId}/orders
+          filters:
+            - AuthFilter
+            - HeaderFilter
