@@ -18,7 +18,7 @@ import static by.ares.apigateway.util.ApiGatewayConstants.CLAIM_NAME_USER_ID;
 @Component
 public class JwtUtil {
 
-    @Value("${jwt.secret.key}")
+    @Value("${JWT_SECRET_KEY}")
     private String secret;
 
 
