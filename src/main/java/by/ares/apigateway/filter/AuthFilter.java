@@ -24,7 +24,7 @@ public class AuthFilter extends AbstractGatewayFilterFactory<Object> {
 
     private final WebClient webClient;
     private final JwtUtil jwtUtil;
-    @Value("${AUTH_SERVICE_URI:}")
+    @Value("${AUTH_SERVICE_URL:}")
     private String authServiceUri;
 
     @Override
@@ -44,7 +44,7 @@ public class AuthFilter extends AbstractGatewayFilterFactory<Object> {
                         return chain.filter(mutatedExchange);
                     })
                     .onErrorResume(t ->
-                            unauthorizedResponse(exchange, "Token validation failed"));
+                            unauthorizedResponse(exchange, "Token validation failed" + t.getMessage()));
         };
     }
 

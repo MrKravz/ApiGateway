@@ -1,0 +1,150 @@
+networks:
+  app-network:
+    driver: bridge
+
+volumes:
+  user-postgres-data:
+  auth-postgres-data:
+  order-postgres-data:
+
+services:
+  # ========== Базы данных ==========
+  user-postgres:
+    image: postgres:15-alpine
+    container_name: user-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${USER_DB_NAME}
+    ports:
+      - "${USER_DB_PORT}:5432"
+    volumes:
+      - user-postgres-data:/var/lib/postgresql/data
+    networks:
+      - app-network
+
+  auth-postgres:
+    image: postgres:15-alpine
+    container_name: auth-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${AUTH_DB_NAME}
+    ports:
+      - "${AUTH_DB_PORT}:5432"
+    volumes:
+      - auth-postgres-data:/var/lib/postgresql/data
+    networks:
+      - app-network
+
+  order-postgres:
+    image: postgres:15-alpine
+    container_name: order-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USERNAME}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${ORDER_DB_NAME}
+    ports:
+      - "${ORDER_DB_PORT}:5432"
+    volumes:
+      - order-postgres-data:/var/lib/postgresql/data
+    networks:
+      - app-network
+
+  # ========== Redis ==========
+  redis:
+    image: redis:7-alpine
+    container_name: redis-cache
+    restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+    ports:
+      - "${REDIS_PORT}:6379"
+    networks:
+      - app-network
+
+  # ========== Сервисы ==========
+  user-service:
+    build:
+      context: ../UserService
+      dockerfile: Dockerfile
+    container_name: user-service
+    restart: unless-stopped
+    depends_on:
+      - user-postgres
+      - redis
+    ports:
+      - "${USER_SERVICE_PORT}:8081"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_DOCKER_URL: ${USER_DB_DOCKER_URL}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      REDIS_PASSWORD: ${REDIS_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+    networks:
+      - app-network
+
+  auth-service:
+    build:
+      context: ../AuthenticationService
+      dockerfile: Dockerfile
+    container_name: auth-service
+    restart: unless-stopped
+    depends_on:
+      - auth-postgres
+      - user-service
+    ports:
+      - "${AUTH_SERVICE_PORT}:8082"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_DOCKER_URL: ${AUTH_DB_DOCKER_URL}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      JWT_SECRET: ${JWT_SECRET}
+      USER_SERVICE_URL: ${USER_SERVICE_URL}
+    networks:
+      - app-network
+
+  order-service:
+    build:
+      context: ../OrderService
+      dockerfile: Dockerfile
+    container_name: order-service
+    restart: unless-stopped
+    depends_on:
+      - order-postgres
+      - user-service
+    ports:
+      - "${ORDER_SERVICE_PORT}:8083"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DB_DOCKER_URL: ${ORDER_DB_DOCKER_URL}
+      DB_USERNAME: ${DB_USERNAME}
+      DB_PASSWORD: ${DB_PASSWORD}
+      USER_SERVICE_URL: ${USER_SERVICE_URL}
+      JWT_SECRET: ${JWT_SECRET}
+    networks:
+      - app-network
+
+  api-gateway:
+    build:
+      context: .            # текущая папка ApiGateway
+      dockerfile: Dockerfile
+    container_name: api-gateway
+    restart: unless-stopped
+    depends_on:
+      - user-service
+      - auth-service
+      - order-service
+    ports:
+      - "${API_GATEWAY_PORT}:8080"
+    environment:
+      USER_SERVICE_URL: http://user-service:8081
+      AUTH_SERVICE_URL: http://auth-service:8082
+      ORDER_SERVICE_URL: http://order-service:8083
+      JWT_SECRET: ${JWT_SECRET}
+    networks:
+      - app-network
