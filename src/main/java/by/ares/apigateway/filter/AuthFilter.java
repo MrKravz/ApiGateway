@@ -29,32 +29,29 @@ public class AuthFilter extends AbstractGatewayFilterFactory<Object> {
 
     @Override
     public GatewayFilter apply(Object config) {
-        return (exchange, chain) -> {
-            String token = jwtUtil.extractToken(exchange);
-            return webClient.post()
-                    .uri(authServiceUri + URI_VALIDATE_POSTFIX)
-                    .bodyValue(new AccessTokenRequest(token))
-                    .retrieve()
-                    .bodyToMono(Boolean.class)
-                    .flatMap(isValid -> {
-                        if (!isValid) {
-                            return unauthorizedResponse(exchange, "Token validation failed");
-                        }
-                       var mutatedExchange = setHeaders(exchange, token);
-                        return chain.filter(mutatedExchange);
-                    })
-                    .onErrorResume(t ->
-                            unauthorizedResponse(exchange, "Token validation failed" + t.getMessage()));
-        };
+        return (exchange, chain) ->
+                Mono.fromCallable(() -> jwtUtil.extractToken(exchange)).flatMap(token -> webClient.post()
+                        .uri(authServiceUri + URI_VALIDATE_POSTFIX)
+                        .bodyValue(new AccessTokenRequest(token))
+                        .retrieve()
+                        .bodyToMono(Boolean.class)
+                        .flatMap(isValid -> {
+                            if (!isValid) {
+                                return unauthorizedResponse(exchange, "Token validation failed");
+                            }
+                            var mutatedExchange = setHeaders(exchange, token);
+                            return chain.filter(mutatedExchange);
+                        })
+                        .onErrorResume(t ->
+                                unauthorizedResponse(exchange, "Token validation failed: " + t.getMessage())));
     }
 
     private Mono<Void> unauthorizedResponse(ServerWebExchange exchange, String exceptionResponse) {
         exchange.getResponse().setStatusCode(HttpStatus.UNAUTHORIZED);
         exchange.getResponse().getHeaders().setContentType(MediaType.APPLICATION_JSON);
-        String body = exceptionResponse;
         DataBuffer buffer = exchange.getResponse()
                 .bufferFactory()
-                .wrap(body.getBytes(StandardCharsets.UTF_8));
+                .wrap(exceptionResponse.getBytes(StandardCharsets.UTF_8));
         return exchange.getResponse().writeWith(Mono.just(buffer));
     }
 

@@ -18,9 +18,11 @@ import static by.ares.apigateway.util.ApiGatewayConstants.CLAIM_NAME_USER_ID;
 @Component
 public class JwtUtil {
 
-    @Value("${JWT_SECRET:}")
-    private String secret;
+    private final SecretKey secretKey;
 
+    public JwtUtil(@Value("${JWT_SECRET:}") String secret) {
+        secretKey = getSigningKey(secret);
+    }
 
     public String extractToken(ServerWebExchange exchange) {
         String authHeader = exchange.getRequest().getHeaders().getFirst(HttpHeaders.AUTHORIZATION);
@@ -40,12 +42,13 @@ public class JwtUtil {
 
     private Claims extractClaims(String token) {
         return Jwts.parserBuilder()
-                .setSigningKey(getSigningKey())
+                .setSigningKey(secretKey)
                 .build()
                 .parseClaimsJws(token)
                 .getBody();
     }
-    private SecretKey getSigningKey() {
+
+    private SecretKey getSigningKey(String secret) {
         return Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
     }
 
