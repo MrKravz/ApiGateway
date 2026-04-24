@@ -11,7 +11,7 @@ spring:
           predicates:
             - Path=/users/**, /payment-cards/**
           filters:
-            - AuthFilter
+            - Auth
 
         - id: auth-service-route
           uri: ${AUTH_SERVICE_URL}
@@ -21,6 +21,13 @@ spring:
         - id: order-service-route
           uri: ${ORDER_SERVICE_URL}
           predicates:
-            - Path=/orders/**, /items/**, /users/{userId}/orders
+            - Path=/orders/**, /items/**
           filters:
-            - AuthFilter
+            - Auth
+
+        - id: payment-service-route
+          uri: ${PAYMENT_SERVICE_URL}
+          predicates:
+            - Path=/payments/**
+          filters:
+            - Auth

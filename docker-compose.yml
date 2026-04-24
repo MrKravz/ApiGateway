@@ -6,6 +6,7 @@ volumes:
   user-postgres-data:
   auth-postgres-data:
   order-postgres-data:
+  mongodb_data:
 
 services:
   user-postgres:
@@ -63,6 +64,54 @@ services:
     networks:
       - app-network
 
+  mongodb:
+    image: mongo:6
+    container_name: mongo-payment
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - app-network
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.4.0
+    container_name: zookeeper-service
+    restart: unless-stopped
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    networks:
+      - app-network
+
+  kafka:
+    image: confluentinc/cp-kafka:7.4.0
+    container_name: kafka-service
+    restart: unless-stopped
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper-service:2181
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka-service:9092
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    ports:
+      - "9092:9092"
+    healthcheck:
+      test: [ "CMD", "kafka-topics", "--bootstrap-server", "localhost:9092", "--list" ]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+    networks:
+      - app-network
+
   user-service:
     build:
       context: ../UserService
@@ -114,8 +163,12 @@ services:
     container_name: order-service
     restart: unless-stopped
     depends_on:
-      - order-postgres
-      - user-service
+      order-postgres:
+        condition: service_started
+      kafka:
+        condition: service_healthy
+      user-service:
+        condition: service_started
     ports:
       - "${ORDER_SERVICE_PORT}:8083"
     environment:
@@ -124,6 +177,44 @@ services:
       DB_USERNAME: ${DB_USERNAME}
       DB_PASSWORD: ${DB_PASSWORD}
       USER_SERVICE_URL: ${EXTERNAL_USER_SERVICE_URL}
+      KAFKA_BOOTSTRAP_SERVERS: ${DOCKER_KAFKA_BOOTSTRAP_SERVERS}
+      TOPIC_NAME: ${TOPIC_NAME}
+      JWT_SECRET: ${JWT_SECRET}
+    networks:
+      - app-network
+
+  bank-mock-service:
+    build:
+      context: ../BankApiMockService
+      dockerfile: Dockerfile
+    container_name: bank-mock-service
+    restart: unless-stopped
+    ports:
+      - "8085:8085"
+    networks:
+      - app-network
+
+  payment-service:
+    build:
+      context: ../PaymentService
+      dockerfile: Dockerfile
+    container_name: payment-service
+    restart: unless-stopped
+    depends_on:
+      mongodb:
+        condition: service_started
+      kafka:
+        condition: service_healthy
+      bank-mock-service:
+        condition: service_started
+    ports:
+      - "${PAYMENT_SERVICE_PORT}:8084"
+    environment:
+      SPRING_PROFILES_ACTIVE: docker
+      DOCKER_SPRING_MONGODB_URI: ${DOCKER_SPRING_MONGODB_URI}
+      SPRING_KAFKA_BOOTSTRAP_SERVERS: ${DOCKER_KAFKA_BOOTSTRAP_SERVERS}
+      DOCKER_EXTERNAL_SERVICE_URL: ${DOCKER_EXTERNAL_SERVICE_URL}
+      TOPIC_NAME: ${TOPIC_NAME}
       JWT_SECRET: ${JWT_SECRET}
     networks:
       - app-network
@@ -138,12 +229,14 @@ services:
       - user-service
       - auth-service
       - order-service
+      - payment-service
     ports:
       - "${API_GATEWAY_PORT}:8080"
     environment:
-      USER_SERVICE_URL: http://user-service:8081
-      AUTH_SERVICE_URL: http://auth-service:8082
-      ORDER_SERVICE_URL: http://order-service:8083
+      USER_SERVICE_URL: ${USER_SERVICE_URL}
+      AUTH_SERVICE_URL: ${AUTH_SERVICE_URL}
+      ORDER_SERVICE_URL: ${ORDER_SERVICE_URL}
+      PAYMENT_SERVICE_URL: ${PAYMENT_SERVICE_URL}
       JWT_SECRET: ${JWT_SECRET}
     networks:
       - app-network
