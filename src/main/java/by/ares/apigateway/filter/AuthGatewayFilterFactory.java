@@ -20,7 +20,7 @@ import static by.ares.apigateway.util.ApiGatewayConstants.URI_VALIDATE_POSTFIX;
 
 @Component
 @RequiredArgsConstructor
-public class AuthFilter extends AbstractGatewayFilterFactory<Object> {
+public class AuthGatewayFilterFactory extends AbstractGatewayFilterFactory<Object> {
 
     private final WebClient webClient;
     private final JwtUtil jwtUtil;
