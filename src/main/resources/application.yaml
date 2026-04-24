@@ -1,3 +1,26 @@
+server:
+  port: 8080
 spring:
   application:
     name: ApiGateway
+  cloud:
+    gateway:
+      routes:
+        - id: user-service-route
+          uri: ${USER_SERVICE_URL}
+          predicates:
+            - Path=/users/**, /payment-cards/**
+          filters:
+            - AuthFilter
+
+        - id: auth-service-route
+          uri: ${AUTH_SERVICE_URL}
+          predicates:
+            - Path=/auth/**
+
+        - id: order-service-route
+          uri: ${ORDER_SERVICE_URL}
+          predicates:
+            - Path=/orders/**, /items/**, /users/{userId}/orders
+          filters:
+            - AuthFilter
