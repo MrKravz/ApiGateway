@@ -20,6 +20,7 @@ target/
 *.ipr
 .env
 .dockerignore
+secrets.yaml
 
 ### NetBeans ###
 /nbproject/private/
