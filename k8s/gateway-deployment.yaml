@@ -44,6 +44,8 @@ spec:
                 secretKeyRef:
                   name: app-secrets
                   key: JWT_SECRET
+            - name: SERVER_MAX_HTTP_REQUEST_HEADER_SIZE   # ← добавили
+              value: "32KB"
           startupProbe:
             httpGet:
               path: /actuator/health
